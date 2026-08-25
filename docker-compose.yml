@@ -1,0 +1,18 @@
+services:
+  renamely:
+    build: .
+    image: renamely:latest
+    container_name: renamely
+    restart: unless-stopped
+    environment:
+      INPUT_DIR: "/app/input"
+      OUTPUT_DIR: "/app/output"
+      LLM_BASE_URL: "http://host.docker.internal:11434/v1"
+      LLM_MODEL: "gemma4:12b"
+      LLM_API_KEY: "ollama"
+      TZ: "America/Sao_Paulo"
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
