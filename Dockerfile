@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.14-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -7,17 +7,19 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends cron tzdata \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 1000 renamely \
+    && useradd --system --uid 1000 --gid renamely --home-dir /app --shell /usr/sbin/nologin renamely \
+    && mkdir -p /app/input /app/output
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY pyproject.toml script.py ./
+RUN pip install --no-cache-dir --no-compile --root-user-action=ignore .
 
-COPY script.py /app/script.py
-COPY entrypoint.sh /app/entrypoint.sh
-
-RUN chmod +x /app/entrypoint.sh
+COPY entrypoint.sh ./
+RUN chmod 0755 script.py entrypoint.sh \
+    && chown -R renamely:renamely /app/input /app/output /app/script.py
 
 COPY crontab /etc/cron.d/renamely
 RUN chmod 0644 /etc/cron.d/renamely

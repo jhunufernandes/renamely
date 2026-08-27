@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["script"]
+
+[project]
+name = "renamely"
+version = "0.1.0"
+description = "Renames PDFs using an LLM"
+requires-python = ">=3.14"
+dependencies = [
+    "pymupdf>=1.25.0",
+    "openai>=1.60.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.0",
+    "ty>=0.0.1",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["script"]
