@@ -11,12 +11,16 @@ from dataclasses import dataclass
 import fitz
 from openai import OpenAI
 
-SYSTEM_PROMPT = "You are a specialized PDF reader."
+SYSTEM_PROMPT = (
+    "You read document images and reply with exactly one file name "
+    "and nothing else."
+)
 
 DEFAULT_USER_PROMPT = (
-    "Analyze this receipt image and return strictly in the format: "
-    "pix_[payee_name]_[amount]. No accents, no uppercase letters, "
-    "no file extension, no backticks."
+    "Suggest a short, descriptive file name for this document, based on "
+    "its most distinctive content.\n"
+    "Answer with ONLY the file name: no extension, no quotes, no "
+    "backticks, no explanation."
 )
 
 RENDER_DPI = 150
@@ -38,8 +42,8 @@ def load_configuration() -> Configuration:
     return Configuration(
         input_dir=pathlib.Path(os.environ.get("INPUT_DIR", "/app/input")),
         output_dir=pathlib.Path(os.environ.get("OUTPUT_DIR", "/app/output")),
-        llm_base_url=os.environ.get("LLM_BASE_URL", "http://host.docker.internal:11434/v1"),
-        llm_model=os.environ.get("LLM_MODEL", "gemma4:12b"),
+        llm_base_url=os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
+        llm_model=os.environ.get("LLM_MODEL", "z-ai/glm-5.3-flash"),
         llm_api_key=os.environ.get("LLM_API_KEY", ""),
         user_prompt=os.environ.get("LLM_USER_PROMPT", DEFAULT_USER_PROMPT),
     )
@@ -103,19 +107,20 @@ def request_name_from_llm(
     )
 
 
+_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9 ._\-]")
+
+
 def sanitize_name(raw_name: str) -> str:
     name = raw_name.strip().strip("\"'")
     name = name.replace("`", "")
     name = unicodedata.normalize("NFKD", name)
     name = "".join(c for c in name if not unicodedata.combining(c))
-    name = name.lower()
-    name = name.replace("&", " and ")
-    name = name.replace(" ", "_")
-    name = re.sub(r"[^a-z0-9_\-]", "", name)
+    name = _FILENAME_UNSAFE.sub("", name)
+    name = re.sub(r"\s+", " ", name)
     name = re.sub(r"_+", "_", name)
-    name = name.strip("_-")
-    if name and not name.startswith("pix_"):
-        name = f"pix_{name}"
+    name = name.strip(" -_")
+    if name.lower().endswith(".pdf"):
+        name = name[:-4].rstrip(" -_")
     return name
 
 
@@ -181,7 +186,7 @@ def main() -> int:
             new_name = sanitize_name(raw_suggestion or "")
 
             if not new_name:
-                new_name = sanitize_name(pdf_file.stem) or f"pix_receipt_{index}"
+                new_name = sanitize_name(pdf_file.stem) or f"document_{index}"
                 print(
                     f"    LLM returned an empty/invalid result. Using fallback name: {new_name}",
                     flush=True,
