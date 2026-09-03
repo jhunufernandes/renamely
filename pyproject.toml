@@ -15,11 +15,12 @@ dependencies = [
     "openai>=1.60.0",
 ]
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "ruff>=0.8.0",
     "ty>=0.0.1",
 ]
+tests = []
 
 [tool.ruff]
 target-version = "py314"

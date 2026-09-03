@@ -6,8 +6,8 @@ and the returned suggestion becomes the new filename (shape dictated by the
 configured prompt). Files move from `/app/input` to `/app/output`, never
 colliding with existing names.
 
-Ships with domain-agnostic defaults — OpenRouter + `google/gemma-4-31b-it:free`
-(a free vision-capable model) and a generic "suggest a filename" prompt.
+Ships with domain-agnostic defaults — OpenRouter + `z-ai/glm-5.3-flash` (a
+vision-capable model) and a generic "suggest a filename" prompt.
 Receipt-specific rules belong in `LLM_USER_PROMPT` (see
 [Custom prompts](#custom-prompts)).
 
@@ -38,9 +38,11 @@ Environment variables read by `script.py`:
 | `LLM_API_KEY` | *(empty)* | API key — **required for OpenRouter**; placeholder is used if empty (fine for keyless local servers) |
 | `LLM_USER_PROMPT` | *generic filename prompt* | Instruction sent with every image |
 
-> Note: cron jobs do not inherit container environment variables, so scheduled
-> runs always use these defaults baked into `script.py`. Edit them there (or
-> run manually with overrides).
+> Note: cron jobs do not inherit container environment variables. At container
+> start, `entrypoint.sh` persists every variable above that is set into
+> `/app/env.sh` (owned and readable only by the unprivileged user), and the
+> scheduled command sources it before each run — so configure via
+> `docker run -e` / `--env-file` and scheduled runs pick it up too.
 
 For **OpenRouter**, only the API key is needed (URL and model already default
 to it):
@@ -84,8 +86,10 @@ docker run -d \
 
 ### Prebuilt image
 
-CI (GitHub Actions) builds multi-arch images (`amd64` + `arm64`) and pushes to
-GHCR on every push to `main`:
+CI (GitHub Actions) reuses the workflows from
+[jhunufernandes/python-github-actions](https://github.com/jhunufernandes/python-github-actions):
+lint (ruff + ty) and tests on pushes/PRs to `main`, and multi-arch images
+(`amd64` + `arm64`) pushed to GHCR on every push to `main`:
 
 ```sh
 docker pull ghcr.io/<owner>/renamely:latest
@@ -134,10 +138,11 @@ Requires Python ≥ 3.14.
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -e . --group dev   # runtime + ruff + ty
+.venv/bin/pip install -e .[dev]   # runtime + ruff + ty
 
 .venv/bin/ruff check .
 .venv/bin/ty check script.py
+.venv/bin/python -m unittest discover -v
 ```
 
 Project layout: single-module package (`script.py`) defined in
@@ -146,5 +151,6 @@ directly from it with `pip install .`.
 
 ## License / ownership notes
 
+- MIT licensed — see [LICENSE](LICENSE).
 - Receipts are processed by whatever LLM endpoint you configure — keep data
   sensitivity in mind before pointing this at a hosted provider.
