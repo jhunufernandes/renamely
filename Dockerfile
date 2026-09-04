@@ -21,8 +21,5 @@ COPY entrypoint.sh ./
 RUN chmod 0755 script.py entrypoint.sh \
     && chown -R renamely:renamely /app/input /app/output /app/script.py
 
-COPY crontab /etc/cron.d/renamely
-RUN chmod 0644 /etc/cron.d/renamely
-
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["cron", "-f"]
