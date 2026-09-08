@@ -5,6 +5,8 @@ import unittest
 from unittest import mock
 
 from script import (
+    DEFAULT_INPUT_DIR,
+    DEFAULT_OUTPUT_DIR,
     DEFAULT_USER_PROMPT,
     list_pdf_files,
     load_configuration,
@@ -93,30 +95,30 @@ class LoadConfigurationTest(unittest.TestCase):
     def test_defaults(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             configuration = load_configuration()
-        self.assertEqual(configuration.input_dir, pathlib.Path("/app/input"))
-        self.assertEqual(configuration.output_dir, pathlib.Path("/app/output"))
         self.assertEqual(configuration.llm_base_url, "https://openrouter.ai/api/v1")
         self.assertEqual(configuration.llm_model, "z-ai/glm-5.3-flash")
         self.assertEqual(configuration.llm_api_key, "")
         self.assertEqual(configuration.user_prompt, DEFAULT_USER_PROMPT)
+        self.assertEqual(configuration.input_dir, pathlib.Path(DEFAULT_INPUT_DIR))
+        self.assertEqual(configuration.output_dir, pathlib.Path(DEFAULT_OUTPUT_DIR))
 
     def test_environment_overrides(self):
         env = {
-            "INPUT_DIR": "/data/in",
-            "OUTPUT_DIR": "/data/out",
             "LLM_BASE_URL": "http://localhost:8080/v1",
             "LLM_MODEL": "some/model",
             "LLM_API_KEY": "sk-test",
             "LLM_USER_PROMPT": "Name this document.",
+            "INPUT_DIR": "/data/in",
+            "OUTPUT_DIR": "/data/out",
         }
         with mock.patch.dict(os.environ, env, clear=True):
             configuration = load_configuration()
-        self.assertEqual(configuration.input_dir, pathlib.Path("/data/in"))
-        self.assertEqual(configuration.output_dir, pathlib.Path("/data/out"))
         self.assertEqual(configuration.llm_base_url, "http://localhost:8080/v1")
         self.assertEqual(configuration.llm_model, "some/model")
         self.assertEqual(configuration.llm_api_key, "sk-test")
         self.assertEqual(configuration.user_prompt, "Name this document.")
+        self.assertEqual(configuration.input_dir, pathlib.Path("/data/in"))
+        self.assertEqual(configuration.output_dir, pathlib.Path("/data/out"))
 
 
 if __name__ == "__main__":

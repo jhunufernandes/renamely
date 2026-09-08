@@ -11,8 +11,8 @@ vision-capable model) and a generic "suggest a filename" prompt.
 Receipt-specific rules belong in `LLM_USER_PROMPT` (see
 [Custom prompts](#custom-prompts)).
 
-Runs unattended inside a container: cron triggers the script at **04:00 on the
-1st day of every month** (container timezone).
+Runs unattended inside a container: cron triggers the script on a schedule
+configured via `CRON_SCHEDULE` (container timezone).
 
 ## How it works
 
@@ -32,11 +32,15 @@ Environment variables read by `script.py`:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `INPUT_DIR` | `/app/input` | Folder scanned for PDFs |
-| `OUTPUT_DIR` | `/app/output` | Destination folder |
+| `OUTPUT_DIR` | `/app/output` | Destination folder for renamed files |
 | `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
 | `LLM_MODEL` | `z-ai/glm-5.3-flash` | Model slug — must support image input; other free options: `google/gemma-4-26b-a4b-it:free`, `minimax/minimax-m3:free` |
 | `LLM_API_KEY` | *(empty)* | API key — **required for OpenRouter**; placeholder is used if empty (fine for keyless local servers) |
 | `LLM_USER_PROMPT` | *generic filename prompt* | Instruction sent with every image |
+
+In Docker, `INPUT_DIR`/`OUTPUT_DIR` default to the fixed mount points
+`/app/input` and `/app/output` (mount your host folders there). Outside
+Docker, point them at any folders via environment variables.
 
 > Note: cron jobs do not inherit container environment variables. At container
 > start, `entrypoint.sh` persists every variable above that is set into
@@ -64,7 +68,7 @@ Answer with ONLY the file name: no extension, no quotes, no backticks, no explan
 '
 
 mkdir -p input output
-.venv/bin/python script.py
+INPUT_DIR=./input OUTPUT_DIR=./output .venv/bin/python script.py
 ```
 
 Single-quoted strings may span multiple lines in the shell — newlines are kept
@@ -99,13 +103,16 @@ docker run -d \
     ghcr.io/<owner>/renamely:latest
 ```
 
-Schedule lives in [`crontab`](crontab) (`0 4 1 * *`); change it there and
-rebuild. Timezone comes from the container (`TZ`, default `America/Sao_Paulo`).
+Schedule comes from the `CRON_SCHEDULE` environment variable (5-field cron
+expression). Cron fires in UTC unless you pass `-e TZ=<tz>` to `docker run`.
 
 ### Without Docker
 
 Requires Python ≥ 3.14. No cron or root user needed — any scheduler that can
-run the command works (systemd timer, host crontab, etc.).
+run the command works (systemd timer, host crontab, etc.). Easiest option is
+the bundled helper, which sources a `.env` file (create it from
+[`.env.example`](.env.example); `INPUT_DIR`/`OUTPUT_DIR` default to
+`./input`/`./output` when unset):
 
 ```sh
 git clone <repo-url> && cd renamely
@@ -113,20 +120,20 @@ git clone <repo-url> && cd renamely
 python3 -m venv .venv
 .venv/bin/pip install -e .
 
-mkdir -p input output
-INPUT_DIR=./input OUTPUT_DIR=./output .venv/bin/python script.py
+cp .env.example .env   # fill in the values
+./run_local.sh
 ```
 
 All environment variables from the table above work the same way, e.g.
 pointing at Ollama running locally:
 
 ```sh
-LLM_BASE_URL=http://localhost:8080/v1 \
-    INPUT_DIR=./input OUTPUT_DIR=./output \
+INPUT_DIR=./input OUTPUT_DIR=./output LLM_BASE_URL=http://localhost:8080/v1 \
     .venv/bin/python script.py
 ```
 
-To replicate the container's monthly schedule with a host crontab:
+To replicate the container's schedule with a host crontab (note: the
+container's cron fires in UTC unless you pass `-e TZ=<tz>` to `docker run`):
 
 ```cron
 0 4 1 * * cd /path/to/renamely && .venv/bin/python script.py >> renamely.log 2>&1

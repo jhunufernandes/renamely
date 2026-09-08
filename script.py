@@ -8,9 +8,10 @@ import time
 import unicodedata
 from dataclasses import dataclass
 
-import fitz
+import pymupdf
 from openai import OpenAI
 
+# Prompts sent to the LLM on every request.
 SYSTEM_PROMPT = (
     "You read document images and reply with exactly one file name "
     "and nothing else."
@@ -23,29 +24,44 @@ DEFAULT_USER_PROMPT = (
     "backticks, no explanation."
 )
 
-RENDER_DPI = 150
+# Configuration defaults, overridable via environment variables
+# (LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, LLM_USER_PROMPT, INPUT_DIR,
+# OUTPUT_DIR).
+DEFAULT_LLM_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_LLM_MODEL = "z-ai/glm-5.3-flash"
+DEFAULT_LLM_API_KEY = ""
+DEFAULT_INPUT_DIR = "/app/input"
+DEFAULT_OUTPUT_DIR = "/app/output"
+
+# LLM request behavior.
 MAX_LLM_ATTEMPTS = 3
 LLM_TIMEOUT_SECONDS = 180.0
+
+# PDF page rendering.
+RENDER_DPI = 150
+
+# Filename sanitization.
+_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9 ._\-]")
 
 
 @dataclass(frozen=True)
 class Configuration:
-    input_dir: pathlib.Path
-    output_dir: pathlib.Path
     llm_base_url: str
     llm_model: str
     llm_api_key: str
     user_prompt: str
+    input_dir: pathlib.Path
+    output_dir: pathlib.Path
 
 
 def load_configuration() -> Configuration:
     return Configuration(
-        input_dir=pathlib.Path(os.environ.get("INPUT_DIR", "/app/input")),
-        output_dir=pathlib.Path(os.environ.get("OUTPUT_DIR", "/app/output")),
-        llm_base_url=os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
-        llm_model=os.environ.get("LLM_MODEL", "z-ai/glm-5.3-flash"),
-        llm_api_key=os.environ.get("LLM_API_KEY", ""),
+        llm_base_url=os.environ.get("LLM_BASE_URL", DEFAULT_LLM_BASE_URL),
+        llm_model=os.environ.get("LLM_MODEL", DEFAULT_LLM_MODEL),
+        llm_api_key=os.environ.get("LLM_API_KEY", DEFAULT_LLM_API_KEY),
         user_prompt=os.environ.get("LLM_USER_PROMPT", DEFAULT_USER_PROMPT),
+        input_dir=pathlib.Path(os.environ.get("INPUT_DIR", DEFAULT_INPUT_DIR)),
+        output_dir=pathlib.Path(os.environ.get("OUTPUT_DIR", DEFAULT_OUTPUT_DIR)),
     )
 
 
@@ -61,7 +77,7 @@ def list_pdf_files(folder: pathlib.Path) -> list[pathlib.Path]:
 
 
 def render_first_page_as_base64(pdf_path: pathlib.Path) -> str:
-    with fitz.open(pdf_path) as document:
+    with pymupdf.open(pdf_path) as document:
         page = document.load_page(0)
         pixmap = page.get_pixmap(dpi=RENDER_DPI)
         png_bytes = pixmap.tobytes("png")
@@ -105,9 +121,6 @@ def request_name_from_llm(
     raise RuntimeError(
         f"Failed to query the LLM after {MAX_LLM_ATTEMPTS} attempts: {last_exception}"
     )
-
-
-_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9 ._\-]")
 
 
 def sanitize_name(raw_name: str) -> str:
