@@ -40,8 +40,9 @@ LLM_TIMEOUT_SECONDS = 180.0
 # PDF page rendering.
 RENDER_DPI = 150
 
-# Filename sanitization.
-_FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9 ._\-]")
+# Filename sanitization. Unicode word characters (including accented letters)
+# are preserved; everything else commonly unsafe in file names is removed.
+_FILENAME_UNSAFE = re.compile(r"[^\w .\-]", re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -126,8 +127,7 @@ def request_name_from_llm(
 def sanitize_name(raw_name: str) -> str:
     name = raw_name.strip().strip("\"'")
     name = name.replace("`", "")
-    name = unicodedata.normalize("NFKD", name)
-    name = "".join(c for c in name if not unicodedata.combining(c))
+    name = unicodedata.normalize("NFKC", name)
     name = _FILENAME_UNSAFE.sub("", name)
     name = re.sub(r"\s+", " ", name)
     name = re.sub(r"_+", "_", name)

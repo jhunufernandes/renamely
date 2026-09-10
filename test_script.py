@@ -21,8 +21,9 @@ class SanitizeNameTest(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(sanitize_name(raw), "Invoice 2024")
 
-    def test_removes_accents(self):
-        self.assertEqual(sanitize_name("Ação e Descrição"), "Acao e Descricao")
+    def test_preserves_accents(self):
+        self.assertEqual(sanitize_name("Ação e Descrição"), "Ação e Descrição")
+        self.assertEqual(sanitize_name("2025-03 Serviços Prestados"), "2025-03 Serviços Prestados")
 
     def test_removes_unsafe_characters(self):
         self.assertEqual(sanitize_name('a/b\\c:d*e?f"g<h>i|j'), "abcdefghij")
