@@ -24,7 +24,7 @@ tests = []
 
 [tool.ruff]
 target-version = "py314"
-line-length = 100
+line-length = 120
 src = ["."]
 
 [tool.ruff.lint]
