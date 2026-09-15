@@ -11,8 +11,10 @@ vision-capable model) and a generic "suggest a filename" prompt.
 Receipt-specific rules belong in `LLM_USER_PROMPT` (see
 [Custom prompts](#custom-prompts)).
 
-Runs unattended inside a container: cron triggers the script on a schedule
-configured via `CRON_SCHEDULE` (container timezone).
+Runs unattended inside a container: built on the
+[cronos](https://github.com/jhunufernandes/cronos) Docker base image, cron
+triggers the script on a schedule configured via `CRON_SCHEDULE` (container
+timezone).
 
 ## How it works
 
@@ -23,11 +25,13 @@ configured via `CRON_SCHEDULE` (container timezone).
    characters removed, whitespace collapsed) — the name's shape is whatever
    the prompt dictates. De-duplicate against existing output files and move.
 
-Exit codes: `0` all good · `2` some failures · `1` missing input folder.
+Exit codes: `0` run completed · `1` fatal error (invalid configuration or
+missing input folder). A failure on an individual file is logged and skipped —
+the run continues with the next file.
 
 ## Configuration
 
-Environment variables read by `script.py`:
+Environment variables read by `main.py`:
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -37,16 +41,19 @@ Environment variables read by `script.py`:
 | `LLM_MODEL` | `z-ai/glm-5.3-flash` | Model slug — must support image input; other free options: `google/gemma-4-26b-a4b-it:free`, `minimax/minimax-m3:free` |
 | `LLM_API_KEY` | *(empty)* | API key — **required for OpenRouter**; placeholder is used if empty (fine for keyless local servers) |
 | `LLM_USER_PROMPT` | *generic filename prompt* | Instruction sent with every image |
+| `LLM_MAX_ATTEMPTS` | `3` | Retries per document before giving up on it |
+| `LLM_TIMEOUT_SECONDS` | `180` | Per-request timeout |
 
 In Docker, `INPUT_DIR`/`OUTPUT_DIR` default to the fixed mount points
 `/app/input` and `/app/output` (mount your host folders there). Outside
 Docker, point them at any folders via environment variables.
 
 > Note: cron jobs do not inherit container environment variables. At container
-> start, `entrypoint.sh` persists every variable above that is set into
-> `/app/env.sh` (owned and readable only by the unprivileged user), and the
-> scheduled command sources it before each run — so configure via
-> `docker run -e` / `--env-file` and scheduled runs pick it up too.
+> start, the [cronos](https://github.com/jhunufernandes/cronos) base image
+> persists every variable that is set into `/app/env.sh` (owned and readable
+> only by the unprivileged user), and the scheduled command sources it before
+> each run — so configure via `docker run -e` / `--env-file` and scheduled
+> runs pick it up too.
 
 For **OpenRouter**, only the API key is needed (URL and model already default
 to it):
@@ -68,7 +75,7 @@ Answer with ONLY the file name: no extension, no quotes, no backticks, no explan
 '
 
 mkdir -p input output
-INPUT_DIR=./input OUTPUT_DIR=./output .venv/bin/python script.py
+INPUT_DIR=./input OUTPUT_DIR=./output .venv/bin/python main.py
 ```
 
 Single-quoted strings may span multiple lines in the shell — newlines are kept
@@ -103,8 +110,15 @@ docker run -d \
     ghcr.io/<owner>/renamely:latest
 ```
 
-Schedule comes from the `CRON_SCHEDULE` environment variable (5-field cron
-expression). Cron fires in UTC unless you pass `-e TZ=<tz>` to `docker run`.
+Scheduling is handled by the cronos base image and configured with two
+container-level variables (not read by `main.py`):
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CRON_SCHEDULE` | *(none — required)* | 5-field cron expression |
+| `COMMAND` | `python /app/main.py` | Command cron runs on every tick; baked into the image, override only to change it |
+
+Cron fires in UTC unless you pass `-e TZ=<tz>` to `docker run`.
 
 ### Without Docker
 
@@ -129,14 +143,14 @@ pointing at Ollama running locally:
 
 ```sh
 INPUT_DIR=./input OUTPUT_DIR=./output LLM_BASE_URL=http://localhost:8080/v1 \
-    .venv/bin/python script.py
+    .venv/bin/python main.py
 ```
 
 To replicate the container's schedule with a host crontab (note: the
 container's cron fires in UTC unless you pass `-e TZ=<tz>` to `docker run`):
 
 ```cron
-0 4 1 * * cd /path/to/renamely && .venv/bin/python script.py >> renamely.log 2>&1
+0 4 1 * * cd /path/to/renamely && .venv/bin/python main.py >> renamely.log 2>&1
 ```
 
 ## Development
@@ -148,13 +162,16 @@ python3 -m venv .venv
 .venv/bin/pip install -e .[dev]   # runtime + ruff + ty
 
 .venv/bin/ruff check .
-.venv/bin/ty check script.py
+.venv/bin/ty check main.py
 .venv/bin/python -m unittest discover -v
 ```
 
-Project layout: single-module package (`script.py`) defined in
+Project layout: single-module package (`main.py`) defined in
 [`pyproject.toml`](pyproject.toml); the Dockerfile installs dependencies
-directly from it with `pip install .`.
+directly from it with `pip install .` on top of the
+[cronos](https://github.com/jhunufernandes/cronos) base image, which provides
+the cron scheduling; [`prestart.sh`](prestart.sh) prepares mounted volumes at
+container start.
 
 ## License / ownership notes
 

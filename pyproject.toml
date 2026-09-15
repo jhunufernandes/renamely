@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["script"]
+py-modules = ["main"]
 
 [project]
 name = "renamely"
@@ -12,7 +12,7 @@ description = "Renames PDFs using an LLM"
 requires-python = ">=3.14"
 dependencies = [
     "pymupdf>=1.25.0",
-    "openai>=1.60.0",
+    "forager @ git+https://github.com/jhunufernandes/forager",
 ]
 
 [project.optional-dependencies]
@@ -39,4 +39,4 @@ select = [
 ignore = []
 
 [tool.ruff.lint.isort]
-known-first-party = ["script"]
+known-first-party = ["main"]
